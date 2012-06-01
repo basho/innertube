@@ -16,18 +16,18 @@ licensed under the Apache 2.0 License.
 pool = Innertube::Pool.new(proc { Connection.new },
                            proc {|c| c.disconnect })
 
-# Grab a connection from the pool, returns the same value 
+# Grab a connection from the pool, returns the same value
 # as the block
-pool.take {|conn| conn.ping } # => true    
+pool.take {|conn| conn.ping } # => true
 
-# Raise the BadResource exception if the resource is no 
+# Raise the BadResource exception if the resource is no
 # longer good
 pool.take do |conn|
   raise Innertube::Pool::BadResource unless conn.connected?
   conn.ping
 end
 
-# Innertube helps your code be re-entrant! Take more resources 
+# Innertube helps your code be re-entrant! Take more resources
 # while you have one checked out.
 pool.take do |conn|
   conn.stream_tweets do |tweet|

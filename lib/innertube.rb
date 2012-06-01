@@ -28,7 +28,7 @@ module Innertube
       # Claims this element of the pool for the current Thread.
       # Do not call this manually, it is only used from inside the pool.
       def lock
-        self.owner = Thread.current
+        @owner = Thread.current
       end
 
       # @return [true,false] Is this element locked/claimed?
@@ -38,7 +38,7 @@ module Innertube
 
       # Releases this element of the pool from the current Thread.
       def unlock
-        self.owner = nil
+        @owner = nil
       end
 
       # @return [true,false] Is this element available for use?
@@ -114,7 +114,7 @@ module Innertube
       element = nil
       opts[:filter] ||= proc {|_| true }
       @lock.synchronize do
-        element = pool.find { |e| e.unlocked? && opts[:filter].call(e.object) }
+        element = @pool.find { |e| e.unlocked? && opts[:filter].call(e.object) }
         unless element
           # No objects were acceptable
           resource = opts[:default] || @open.call

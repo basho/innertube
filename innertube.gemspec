@@ -10,7 +10,9 @@ Gem::Specification.new do |gem|
   gem.homepage = "http://github.com/basho/innertube"
   gem.authors = ["Sean Cribbs", "Kyle Kingsbury"]
 
-    # Files
+  gem.add_development_dependency 'rspec', '~> 2.10.0'
+
+  # Files
   ignores = File.read(".gitignore").split(/\r?\n/).reject{ |f| f =~ /^(#.+|\s*)$/ }.map {|f| Dir[f] }.flatten
   gem.files = (Dir['**/*','.gitignore'] - ignores).reject {|f| !File.file?(f) }
   # gem.test_files = (Dir['spec/**/*','.gitignore'] - ignores).reject {|f| !File.file?(f) }
