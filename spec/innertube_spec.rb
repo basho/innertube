@@ -3,12 +3,12 @@ require 'thread'
 
 describe Innertube::Pool do
   let(:pool_members) { subject.instance_variable_get(:@pool) }
-  
+
   describe 'basics' do
     subject do
       described_class.new(lambda { [0] }, lambda { |x| })
     end
-    
+
     it 'yields a new object' do
       subject.take do |x|
         x.should == [0]
@@ -61,7 +61,7 @@ describe Innertube::Pool do
       pool_members.should be_all {|e| not e.owner }
       pool_members.map { |e| e.object }.should =~ [[0,1,2],[0,3]]
     end
-    
+
     context 'when BadResource is raised' do
       subject do
         described_class.new(lambda do
