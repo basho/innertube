@@ -1,103 +1,102 @@
 require 'spec_helper'
 require 'thread'
+require 'thwait'
 
 describe Innertube::Pool do
-  let(:pool_members) { subject.instance_variable_get(:@pool) }
-
-  describe 'basics' do
-    subject do
-      described_class.new(lambda { [0] }, lambda { |x| })
+  def wait_all(threads)
+    message "Waiting on threads: "
+    ThreadsWait.all_waits(*threads) do |t|
+      message "<#{threads.index(t)}> "
     end
+    message "\n"
+  end
 
-    it 'yields a new object' do
-      subject.take do |x|
-        x.should == [0]
+  let(:pool_members) { pool.instance_variable_get(:@pool) }
+
+  let(:pool) { described_class.new(lambda { [0] }, lambda { |x| }) }
+
+  it 'yields a new object when the pool is empty' do
+    pool.take do |x|
+      x.should == [0]
+    end
+  end
+
+  it 'retains a single object for serial access' do
+    n = 100
+    n.times do |i|
+      pool.take do |x|
+        x.should == [i]
+        x[0] += 1
       end
     end
+    pool.size.should == 1
+  end
 
-    it 'retains a single object for serial access' do
-      n = 100
-      n.times do |i|
-        subject.take do |x|
-          x.should == [i]
-          x[0] += 1
-        end
-      end
-      subject.size.should == 1
-    end
-
-    it 'should be re-entrant' do
-      n = 10
-      n.times do |i|
-        subject.take do |x|
-          x.replace [1]
-          subject.take do |y|
-            y.replace [2]
-            subject.take do |z|
-              z.replace [3]
-              subject.take do |t|
-                t.replace [4]
-              end
+  it 'should be re-entrant' do
+    n = 10
+    n.times do |i|
+      pool.take do |x|
+        x.replace [1]
+        pool.take do |y|
+          y.replace [2]
+          pool.take do |z|
+            z.replace [3]
+            pool.take do |t|
+              t.replace [4]
             end
           end
         end
       end
-      subject.instance_variable_get(:@pool).map { |e| e.object.first }.sort.should == [1,2,3,4]
     end
+    pool_members.map { |e| e.object.first }.sort.should == [1,2,3,4]
+  end
 
 
-    it 'should unlock when exceptions are raised' do
-      begin
-        subject.take do |x|
-          x << 1
-          subject.take do |y|
-            x << 2
-            y << 3
-            raise
-          end
+  it 'should unlock when exceptions are raised' do
+    begin
+      pool.take do |x|
+        x << 1
+        pool.take do |y|
+          x << 2
+          y << 3
+          raise
         end
-      rescue
       end
-      pool_members.should be_all {|e| not e.owner }
-      pool_members.map { |e| e.object }.should =~ [[0,1,2],[0,3]]
+    rescue
+    end
+    pool_members.should be_all {|e| not e.owner }
+    pool_members.map { |e| e.object }.should =~ [[0,1,2],[0,3]]
+  end
+
+  context 'when BadResource is raised' do
+    let(:pool) do
+      described_class.new(lambda { mock('resource').tap {|m| m.should_receive(:close) } },
+                          lambda { |res| res.close })
     end
 
-    context 'when BadResource is raised' do
-      subject do
-        described_class.new(lambda do
-                              m = mock('resource')
-                              m.should_receive(:close)
-                              m
-                            end,
-                            lambda do |res|
-                              res.close
-                            end)
-      end
-
-      it 'should delete' do
-        lambda do
-          subject.take do |x|
-            raise Innertube::Pool::BadResource
-          end
-        end.should raise_error(Innertube::Pool::BadResource)
-        subject.size.should == 0
-      end
+    it 'should remove the member from the pool' do
+      lambda do
+        pool.take do |x|
+          raise Innertube::Pool::BadResource
+        end
+      end.should raise_error(Innertube::Pool::BadResource)
+      pool_members.size.should == 0
     end
   end
 
-  describe 'threads' do
-    subject {
-      described_class.new(lambda { [] }, lambda { |x| })
-    }
+
+  context 'threaded access' do
+    let!(:pool) { described_class.new(lambda { [] }, lambda { |x| }) }
 
     it 'should allocate n objects for n concurrent operations' do
       # n threads concurrently allocate and sign objects from the pool
       n = 10
       readyq = Queue.new
       finishq = Queue.new
+
       threads = (0...n).map do
         Thread.new do
-          subject.take do |x|
+          pool.take do |x|
             readyq << 1
             x << Thread.current
             finishq.pop
@@ -105,16 +104,18 @@ describe Innertube::Pool do
         end
       end
 
+      # Give the go-ahead to all threads
       n.times { readyq.pop }
+
+      # Let all threads finish
       n.times { finishq << 1 }
 
       # Wait for completion
-      threads.each do |t|
-        t.join
-      end
+      ThreadsWait.all_waits(*threads)
 
       # Should have taken exactly n objects to do this
-      subject.size.should == n
+      pool_members.size.should == n
+
       # And each one should be signed exactly once
       pool_members.map do |e|
         e.object.size.should == 1
@@ -124,16 +125,17 @@ describe Innertube::Pool do
 
     it 'take with filter and default' do
       n = 10
-      subject = described_class.new(lambda { [] }, lambda { |x| })
+      pool = described_class.new(lambda { [] }, lambda { |x| })
 
       # Allocate several elements of the pool
       q = Queue.new
+      finishq = Queue.new
       threads = (0...n).map do |i|
         Thread.new do
-          subject.take do |a|
-            a << i
+          pool.take do |a|
             q << 1
-            sleep 0.02
+            a << i
+            finishq.pop
           end
         end
       end
@@ -141,29 +143,32 @@ describe Innertube::Pool do
       # Wait for all threads to have acquired an element
       n.times { q.pop }
 
-      threads.each do |t|
-        t.join
-      end
+      # Let all threads finish
+      n.times { finishq << 1 }
+
+      # Wait for completion
+      # threads.each {|t| t.join }
+      ThreadsWait.all_waits(*threads)
 
       # Get and delete existing even elements
-      got = Set.new
+      got = []
       (n / 2).times do
         begin
-          subject.take(
-                       :filter => lambda { |x| x.first.even? },
-                       :default => [:default]
-                       ) do |x|
+          pool.take(
+                    :filter => lambda { |x| x.first.even? },
+                    :default => [:default]
+                    ) do |x|
             got << x.first
             raise Innertube::Pool::BadResource
           end
         rescue Innertube::Pool::BadResource
         end
       end
-      got.should == (0...n).select(&:even?).to_set
+      got.should =~ (0...n).select(&:even?)
 
       # This time, no even elements exist, so we should get the default.
-      subject.take(:filter => lambda { |x| x.first.even? },
-                   :default => :default) do |x|
+      pool.take(:filter => lambda { |x| x.first.even? },
+                :default => :default) do |x|
         x.should == :default
       end
     end
@@ -174,7 +179,7 @@ describe Innertube::Pool do
       threads = (0..n).map do
         Thread.new do
           psleep = 0.75 * rand # up to 50ms sleep
-          subject.take do |a|
+          pool.take do |a|
             started << 1
             a << rand
             sleep psleep
@@ -185,104 +190,115 @@ describe Innertube::Pool do
       n.times { started.pop }
       touched = []
 
-      subject.each do |e|
-        touched << e
-      end
+      pool.each {|e| touched << e }
 
-      threads.each do |t|
-        t.join
-      end
+      ThreadsWait.all_waits(*threads)
 
-      touched.should be_all {|item| pool_members.find {|e| e.object == item } }
+      touched.should be_all {|item| pool_members.any? {|e| e.object == item } }
     end
 
-    it 'should clear' do
-      n = 10
-      subject = described_class.new(
-                                    lambda { mock('connection').tap {|m| m.should_receive(:teardown) }},
-                                    lambda { |b| b.teardown }
-                                    )
+    context 'clearing the pool' do
+      let(:pool) do
+        described_class.new(lambda { mock('connection').tap {|m| m.should_receive(:teardown) }},
+                            lambda { |b| b.teardown })
+      end
 
-      # Allocate several elements of the pool
-      q = Queue.new
-      threads = (0...n).map do |i|
-        Thread.new do
-          subject.take do |a|
-            q << 1
-            sleep 0.1
+      it 'should remove all elements' do
+        n = 10
+        q, fq = Queue.new, Queue.new
+
+        # Allocate several elements of the pool
+        threads = (0...n).map do |i|
+          Thread.new do
+            pool.take do |a|
+              q << i
+              sleep(rand * 0.5)
+              message "W<#{i}> "
+              fq.pop
+              message "X<#{i}> "
+            end
           end
         end
-      end
 
-      # Wait for all threads to have acquired an element
-      n.times { q.pop }
+        # Wait for all threads to have acquired an element
+        n.times { message "S<#{q.pop}> " }
 
-      # Clear the pool while threads still have elements checked out
-      subject.clear
-      pool_members.should be_empty
-
-      # Wait for threads to complete
-      threads.each do |t|
-        t.join
-      end
-    end
-
-    it 'should delete_if' do
-      n = 10
-      subject = described_class.new(
-                                    lambda { [] },
-                                    lambda { |x| }
-                                    )
-
-      # Allocate several elements of the pool
-      q = Queue.new
-      threads = (0...n).map do |i|
-        Thread.new do
-          subject.take do |a|
-            a << i
-            q << 1
-            sleep 0.02
+        # Start a thread to push stuff onto the finish queue, allowing
+        # the worker threads to exit
+        pusher = Thread.new do
+          n.times do |i|
+            message "R<#{i}> "
+            fq << 1
+            sleep(rand * 0.1)
           end
         end
-      end
 
-      # Wait for all threads to have acquired an element
-      n.times { q.pop }
+        # Clear the pool while threads still have elements checked out
+        message "S<C> "
+        pool.clear
+        message "X<C> "
 
-      # Delete odd elements
-      subject.delete_if do |x|
-        x.first.odd?
-      end
-
-      # Verify odds are gone.
-      pool_members.all? do |x|
-        x.object.first.even?
-      end.should == true
-
-      # Wait for threads
-      threads.each do |t|
-        t.join
+        # Wait for threads to complete
+        wait_all(threads + [pusher])
+        pool_members.should be_empty
       end
     end
 
-    it 'stress test', :slow => true do
+    context 'conditionally deleting members' do
+      let(:pool) { described_class.new( lambda { [] }, lambda { |x| } ) }
+      it 'should remove them from the pool' do
+        n = 10
+
+        # Allocate several elements of the pool
+        q = Queue.new
+        threads = (0...n).map do |i|
+          Thread.new do
+            pool.take do |a|
+              message "S<#{i}> "
+              a << i
+              q << i
+              Thread.pass
+            end
+          end
+        end
+
+        # Wait for all threads to have acquired an element
+        n.times { message "X<#{q.pop}> " }
+
+        # Delete odd elements
+        pool.delete_if do |x|
+          x.first.odd?
+        end
+
+        # Verify odds are gone.
+        pool_members.all? do |x|
+          x.object.first.even?
+        end.should == true
+
+        # Wait for threads
+        wait_all threads
+      end
+    end
+
+    it 'stress test', :timeout => 60 do
       n = 100
-      psleep = 0.8
-      tsleep = 0.01
+      passes = 8
       rounds = 100
 
       threads = (0...n).map do
         Thread.new do
           rounds.times do |i|
-            subject.take do |a|
+            pool.take do |a|
               a.should == []
               a << Thread.current
               a.should == [Thread.current]
 
-              # Sleep and check
-              while rand < psleep
-                sleep tsleep
+              # Pass and check
+              passes.times do
+                Thread.pass
+                # Nobody else should get ahold of this while I'm idle
                 a.should == [Thread.current]
+                break if rand > 0.8
               end
 
               a.delete Thread.current
@@ -290,9 +306,7 @@ describe Innertube::Pool do
           end
         end
       end
-      threads.each do |t|
-        t.join
-      end
+      wait_all threads
     end
   end
 end

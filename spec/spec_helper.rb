@@ -4,13 +4,16 @@ require 'rubygems'
 require 'rspec'
 require 'innertube'
 
+require 'spec/support/verbose_formatter'
+require 'spec/support/timeout'
+
 RSpec.configure do |config|
   config.mock_with :rspec
   config.filter_run :focus => true
   config.run_all_when_everything_filtered = true
-
   if defined?(::Java)
-    config.seed = Time.now.utc
+    seed = Time.now.utc
+    config.seed = seed
   else
     config.order = :random
   end
