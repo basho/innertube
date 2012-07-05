@@ -4,8 +4,8 @@ require 'rubygems'
 require 'rspec'
 require 'innertube'
 
-require 'spec/support/verbose_formatter'
-require 'spec/support/timeout'
+require 'support/verbose_formatter'
+require 'support/timeout'
 
 RSpec.configure do |config|
   config.mock_with :rspec
