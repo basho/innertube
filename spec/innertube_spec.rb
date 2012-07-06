@@ -4,9 +4,9 @@ require 'thwait'
 
 describe Innertube::Pool do
   def wait_all(threads)
-    message "Waiting on threads: "
+    message "Waiting on #{threads.size} threads: "
     ThreadsWait.all_waits(*threads) do |t|
-      message "<#{threads.index(t)}> "
+      message "<#{threads.index(t) + 1}> "
     end
     message "\n"
   end
@@ -192,7 +192,7 @@ describe Innertube::Pool do
 
       pool.each {|e| touched << e }
 
-      ThreadsWait.all_waits(*threads)
+      wait_all threads
 
       touched.should be_all {|item| pool_members.any? {|e| e.object == item } }
     end
@@ -280,10 +280,95 @@ describe Innertube::Pool do
       end
     end
 
+    it 'iteration race-condition regression', :timeout => 60 do
+      # This simulates a race-condition where the condition variable
+      # waited on by the iterator until an element is released might
+      # be signaled before the iterator begins waiting, thus dropping
+      # the signal and sending the iterator into an infinite wait.
+
+      # First we pick a largish random thread count, and split it into
+      # threads that release before the iterator starts (split) and
+      # ones that release while the iterator is busy (rest).
+      n = rand(250)
+      split = rand(n)
+      rest = n - split
+
+      message "[#{n}:#{split}] "
+      # We use two queues to signal between the main thread and the
+      # workers, and a queue to communicate with the iterator thread
+      sq, fq, iq = Queue.new, Queue.new, Queue.new
+
+      # Start all the worker threads
+      threads = (0...n).map do |i|
+        Thread.new do
+          pool.take do |e|
+            # Signal to the main thread that we're inside the take
+            sq << i+1
+            # Block waiting on the main thread. When reactivated, log
+            # the exit of the thread
+            fq.pop
+            message "X<#{i+1}> "
+            sq << Thread.current
+          end
+        end
+      end
+
+      # Wait for all workers to start up, log their startup to the console
+      n.times { message "S<#{sq.pop}> " }
+
+      message "[all started] "
+
+      # Now signal for the first group to continue
+      finished = []
+      split.times { fq << 1; finished << sq.pop }
+      wait_all finished
+
+      message "[first group #{split}] "
+
+      # Start the iterator thread
+      iterator = Thread.new do
+        Thread.current[:wait] = true
+        pool.each do |e|
+          # Block in the first iteration so the other workers can exit
+          # while the iterator is not waiting on the condition variable
+          if Thread.current[:wait]
+            sq << 'i'
+            iq.pop
+            Thread.current[:wait] = false
+          end
+          # Make sure we've touched every element of the pool by
+          # modifying every entry.
+          e << 1
+        end
+        message "X<i> "
+      end
+
+      # Wait on the iterator thread to start
+      message "S<#{sq.pop}> "
+
+      # Now signal the remaining workers to finish, and wait on all
+      # workers to exit (even ones that exited in the first pass)
+      finished.clear
+      rest.times { fq << 1; finished << sq.pop }
+      wait_all(finished)
+
+      message "[second group #{rest}] "
+
+      # Now signal the iterator to continue, and wait for it to exit
+      iq << 1
+      wait_all([ iterator ])
+
+      # Finally, verify that all elements of the pool were touched by
+      # the iterator
+      pool_members.each {|e| e.object.size.should == 1 }
+    end
+
     it 'stress test', :timeout => 60 do
-      n = 100
-      passes = 8
-      rounds = 100
+      n = rand(400)
+      passes = rand(20)
+      rounds = rand(200)
+      breaker = rand
+      message "[#{n}t:#{rounds}r:#{passes}p:#{'%0.5f' % breaker}b] "
 
       threads = (0...n).map do
         Thread.new do
@@ -298,10 +383,11 @@ describe Innertube::Pool do
                 Thread.pass
                 # Nobody else should get ahold of this while I'm idle
                 a.should == [Thread.current]
-                break if rand > 0.8
+                break if rand > breaker
               end
 
               a.delete Thread.current
+              message "."
             end
           end
         end
