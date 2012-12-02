@@ -1,4 +1,5 @@
 require 'thread'
+require 'set'
 
 # Innertube is a re-entrant thread-safe resource pool that was
 # extracted from the Riak Ruby Client
