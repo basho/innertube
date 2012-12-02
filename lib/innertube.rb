@@ -61,6 +61,16 @@ module Innertube
       @pool = Set.new
     end
 
+    # Populate the pool with existing, open resources.
+    # @param [Array] An array of resources.
+    def fill(resources)
+      @lock.synchronize do
+        resources.each do |r|
+          @pool << Element.new(r)
+        end
+      end
+    end
+
     # On each element of the pool, calls close(element) and removes it.
     # @private
     def clear
