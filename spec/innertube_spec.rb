@@ -51,6 +51,20 @@ describe Innertube::Pool do
     pool_members.map { |e| e.object.first }.sort.should == [1,2,3,4]
   end
 
+  it 'should be fillable with existing resources' do
+    pool.fill(["Apple", "Banana", "Kiwi"])
+    pool_members.size.should == 3
+
+    pool.take do |x|
+      x.should eq('Apple') 
+      pool.take do |y|
+        y.should eq('Banana')
+        pool.take do |z|
+          z.should eq('Kiwi')
+        end
+      end
+    end
+  end
 
   it 'should unlock when exceptions are raised' do
     begin

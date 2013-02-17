@@ -16,6 +16,9 @@ licensed under the Apache 2.0 License.
 pool = Innertube::Pool.new(proc { Connection.new },
                            proc {|c| c.disconnect })
 
+# Optionally, fill the pool with existing resources
+pool.fill([conn1, conn2, conn3])
+
 # Grab a connection from the pool, returns the same value
 # as the block
 pool.take {|conn| conn.ping } # => true
