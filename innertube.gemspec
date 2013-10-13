@@ -9,6 +9,7 @@ Gem::Specification.new do |gem|
   gem.email = [ "sean@basho.com", "aphyr@aphyr.com" ]
   gem.homepage = "http://github.com/basho/innertube"
   gem.authors = ["Sean Cribbs", "Kyle Kingsbury"]
+  gem.license = "Apache 2.0"
 
   gem.add_development_dependency 'rspec', '~> 2.10.0'
 
