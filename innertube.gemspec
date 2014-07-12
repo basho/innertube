@@ -15,7 +15,7 @@ Gem::Specification.new do |gem|
 
   # Files
   ignores = File.read(".gitignore").split(/\r?\n/).reject{ |f| f =~ /^(#.+|\s*)$/ }.map {|f| Dir[f] }.flatten
-  gem.files = (Dir['**/*','.gitignore'] - ignores).reject {|f| !File.file?(f) }
-  gem.test_files = (Dir['spec/**/*','.gitignore'] - ignores).reject {|f| !File.file?(f) }
+  gem.files = (Dir['**/*'] - ignores).reject {|f| !File.file?(f) }
+  gem.test_files = (Dir['spec/**/*'] - ignores).reject {|f| !File.file?(f) }
   gem.require_paths = ['lib']
 end
