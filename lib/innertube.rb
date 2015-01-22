@@ -125,7 +125,7 @@ module Innertube
       element = nil
       opts[:filter] ||= proc {|_| true }
       @lock.synchronize do
-        element = @pool.find { |e| e.unlocked? && opts[:filter].call(e.object) }
+        element = @pool.to_a.shuffle.find { |e| e.unlocked? && opts[:filter].call(e.object) }
         unless element
           # No objects were acceptable
           resource = opts[:default] || @open.call
