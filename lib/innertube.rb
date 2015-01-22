@@ -135,7 +135,9 @@ module Innertube
         resource = opts[:default] || @open.call
         element = Element.new(resource)
         element.lock
-        @pool << element
+        @lock.synchronize do
+          @pool << element
+        end
       end
 
       begin
