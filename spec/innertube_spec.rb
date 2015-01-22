@@ -52,15 +52,17 @@ describe Innertube::Pool do
   end
 
   it 'should be fillable with existing resources' do
-    pool.fill(["Apple", "Banana", "Kiwi"])
+    fruits = ["Apple", "Banana", "Kiwi"]
+    pool.fill(fruits)
     pool_members.size.should == 3
 
     pool.take do |x|
-      x.should eq('Apple') 
+      fruits.delete(x)
       pool.take do |y|
-        y.should eq('Banana')
+        fruits.delete(y)
         pool.take do |z|
-          z.should eq('Kiwi')
+          fruits.delete(z)
+          fruits.should eql([])
         end
       end
     end
