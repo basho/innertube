@@ -414,7 +414,7 @@ describe Innertube::Pool do
       let!(:delay) { 0.5 }
       let!(:open) { lambda { sleep delay; [] } }
 
-      it 'allocates objects in parallel' do
+      it 'allocates elements in parallel' do
         start_time = Time.now
 
         # n threads concurrently allocate and sign objects from the pool
