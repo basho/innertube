@@ -1,8 +1,8 @@
 # Innertube
 
 Innertube is a thread-safe, re-entrant resource pool, extracted from
-the [Riak Ruby Client](/basho/riak-ruby-client), where it was used to
-pool connections to [Riak](/basho/riak). It is free to use and modify,
+the [Riak Ruby Client](https://github.com/basho/riak-ruby-client), where it was used to
+pool connections to [Riak](https://github.com/basho/riak). It is free to use and modify,
 licensed under the Apache 2.0 License.
 
 ## Example
@@ -52,7 +52,7 @@ pool.delete_if {|conn| conn.idle_time > 5 }
 
 ## Credits
 
-The pool was originally implemented by [Kyle Kingsbury](/aphyr) and
-extracted by [Sean Cribbs](/seancribbs), when bugged about it by
-[Pat Allan](/freelancing-god) at
+The pool was originally implemented by [Kyle Kingsbury](https://github.com/aphyr) and
+extracted by [Sean Cribbs](https://github.com/seancribbs), when bugged about it by
+[Pat Allan](https://github.com/pat) at
 [EuRuKo 2012](http://www.euruko2012.org/).
