@@ -52,18 +52,26 @@ describe Innertube::Pool do
   end
 
   it 'should be fillable with existing resources' do
-    pool.fill(["Apple", "Banana", "Kiwi"])
+    fruits = ["Apple", "Banana", "Kiwi"]
+    pool.fill(fruits)
     pool_members.size.should == 3
 
     pool.take do |x|
-      x.should eq('Apple') 
+      fruits.delete(x)
       pool.take do |y|
-        y.should eq('Banana')
+        fruits.delete(y)
         pool.take do |z|
-          z.should eq('Kiwi')
+          fruits.delete(z)
+          fruits.should eql([])
         end
       end
     end
+  end
+
+  it 'should randomly select from the pool of resources' do
+    pool.fill((1..100).to_a)
+    results = 1000.times.map{ pool.take{|x| x } }
+    results.uniq.size.should > 1
   end
 
   it 'should unlock when exceptions are raised' do
