@@ -52,15 +52,17 @@ describe Innertube::Pool do
   end
 
   it 'should be fillable with existing resources' do
-    pool.fill(["Apple", "Banana", "Kiwi"])
+    fruits = ["Apple", "Banana", "Kiwi"]
+    pool.fill(fruits)
     pool_members.size.should == 3
 
     pool.take do |x|
-      x.should eq('Apple') 
+      fruits.delete(x)
       pool.take do |y|
-        y.should eq('Banana')
+        fruits.delete(y)
         pool.take do |z|
-          z.should eq('Kiwi')
+          fruits.delete(z)
+          fruits.should eql([])
         end
       end
     end
@@ -100,7 +102,8 @@ describe Innertube::Pool do
 
 
   context 'threaded access' do
-    let!(:pool) { described_class.new(lambda { [] }, lambda { |x| }) }
+    let!(:open) { lambda { [] } }
+    let!(:pool) { described_class.new(open, lambda { |x| }) }
 
     it 'should allocate n objects for n concurrent operations' do
       # n threads concurrently allocate and sign objects from the pool
@@ -407,6 +410,40 @@ describe Innertube::Pool do
         end
       end
       wait_all threads
+    end
+
+    context 'with a slow open' do
+      let!(:delay) { 0.5 }
+      let!(:open) { lambda { sleep delay; [] } }
+
+      it 'allocates elements in parallel' do
+        start_time = Time.now
+
+        # n threads concurrently allocate and sign objects from the pool
+        n = 10
+        readyq = Queue.new
+        finishq = Queue.new
+
+        threads = (0...n).map do
+          Thread.new do
+            pool.take do |_|
+              readyq << 1
+              finishq.pop
+            end
+          end
+        end
+
+        # Give the go-ahead to all threads
+        n.times { readyq.pop }
+
+        # Let all threads finish
+        n.times { finishq << 1 }
+
+        # Wait for completion
+        ThreadsWait.all_waits(*threads)
+
+        (Time.now - start_time).should < (delay + 0.5)
+      end
     end
   end
 end

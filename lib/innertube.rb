@@ -124,16 +124,22 @@ module Innertube
       result = nil
       element = nil
       opts[:filter] ||= proc {|_| true }
+
       @lock.synchronize do
         element = @pool.find { |e| e.unlocked? && opts[:filter].call(e.object) }
-        unless element
-          # No objects were acceptable
-          resource = opts[:default] || @open.call
-          element = Element.new(resource)
+        element.lock if element
+      end
+
+      unless element
+        # No objects were acceptable
+        resource = opts[:default] || @open.call
+        element = Element.new(resource)
+        element.lock
+        @lock.synchronize do
           @pool << element
         end
-        element.lock
       end
+
       begin
         result = yield element.object
       rescue BadResource
