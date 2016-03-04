@@ -11,7 +11,7 @@ Gem::Specification.new do |gem|
   gem.authors = ["Sean Cribbs", "Kyle Kingsbury"]
   gem.license = "Apache 2.0"
 
-  gem.add_development_dependency 'rspec', '~> 2.10.0'
+  gem.add_development_dependency 'rspec'
 
   # Files
   ignores = File.read(".gitignore").split(/\r?\n/).reject{ |f| f =~ /^(#.+|\s*)$/ }.map {|f| Dir[f] }.flatten
