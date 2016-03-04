@@ -84,7 +84,7 @@ describe Innertube::Pool do
 
   context 'when BadResource is raised' do
     let(:pool) do
-      described_class.new(lambda { mock('resource').tap {|m| m.should_receive(:close) } },
+      described_class.new(lambda { double('resource').tap {|m| expect(m).to receive(:close) } },
                           lambda { |res| res.close })
     end
 
@@ -94,7 +94,7 @@ describe Innertube::Pool do
           raise Innertube::Pool::BadResource
         end
       end.should raise_error(Innertube::Pool::BadResource)
-      pool_members.size.should == 0
+      expect(pool_members.size).to eq(0)
     end
   end
 
@@ -208,12 +208,12 @@ describe Innertube::Pool do
 
       wait_all threads
 
-      touched.should be_all {|item| pool_members.any? {|e| e.object == item } }
+      expect(touched).to be_all {|item| pool_members.any? {|e| e.object == item } }
     end
 
     context 'clearing the pool' do
       let(:pool) do
-        described_class.new(lambda { mock('connection').tap {|m| m.should_receive(:teardown) }},
+        described_class.new(lambda { double('connection').tap {|m| expect(m).to receive(:teardown) }},
                             lambda { |b| b.teardown })
       end
 
@@ -254,7 +254,7 @@ describe Innertube::Pool do
 
         # Wait for threads to complete
         wait_all(threads + [pusher])
-        pool_members.should be_empty
+        expect(pool_members).to be_empty
       end
     end
 
@@ -285,9 +285,9 @@ describe Innertube::Pool do
         end
 
         # Verify odds are gone.
-        pool_members.all? do |x|
+        expect(pool_members.all? do |x|
           x.object.first.even?
-        end.should == true
+        end).to eq(true)
 
         # Wait for threads
         wait_all threads
@@ -374,7 +374,7 @@ describe Innertube::Pool do
 
       # Finally, verify that all elements of the pool were touched by
       # the iterator
-      pool_members.each {|e| e.object.size.should == 1 }
+      pool_members.each {|e| expect(e.object.size).to eq(1) }
     end
 
     it 'stress test', :timeout => 60 do
@@ -388,15 +388,15 @@ describe Innertube::Pool do
         Thread.new do
           rounds.times do |i|
             pool.take do |a|
-              a.should == []
+              expect(a).to eq([])
               a << Thread.current
-              a.should == [Thread.current]
+              expect(a).to eq([Thread.current])
 
               # Pass and check
               passes.times do
                 Thread.pass
                 # Nobody else should get ahold of this while I'm idle
-                a.should == [Thread.current]
+                expect(a).to eq([Thread.current])
                 break if rand > breaker
               end
 
