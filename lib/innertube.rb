@@ -164,7 +164,7 @@ module Innertube
       @iterator.synchronize do
         until targets.empty?
           @lock.synchronize do
-            @element_released.wait(@iterator) if targets.all? {|e| e.locked? }
+            @element_released.wait(@lock) if targets.all? {|e| e.locked? }
             unlocked, targets = targets.partition {|e| e.unlocked? }
             unlocked.each {|e| e.lock }
           end
